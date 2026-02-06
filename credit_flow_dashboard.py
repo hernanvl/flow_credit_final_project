@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # Title
-st.title("Credit Flow Analysis Dashboard 2025 - Data Visualization Project / Hernan Lopez")
+st.title("Credit Flow Analysis Dashboard 2025 - Data Visualization Project / Hernan Lopez (30357360)")
 st.header("Interactive dashboard to explore credit flow in Ecuador January - November")    
 st.markdown("---")
 
