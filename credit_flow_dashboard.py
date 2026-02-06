@@ -25,8 +25,8 @@ def load_data():
     
     # Data cleaning
     df['date'] = pd.to_datetime(df['date'])
-    df = df.drop_duplicates()
-    df = df[df['date']<'2025-12-01']
+    #df = df.drop_duplicates()
+    #df = df[df['date']<'2025-12-01']
     
     # Handle missing values
     numeric_cols = df.select_dtypes(include=[np.number]).columns
@@ -51,8 +51,8 @@ def load_data():
     
     # Income category
     df['income_category'] = pd.cut(df['income'], 
-                                    bins=[0, 500, 1000, 2000, 5000, float('inf')],
-                                    labels=['Very Low', 'Low', 'Medium', 'High', 'Very High'])
+                                    bins=[0, 500, 1000, float('inf')],
+                                    labels=[ 'Low', 'Medium', 'High'])
     
     # Party type
     df['party_type'] = df['supervisor_sales'].apply(
@@ -114,9 +114,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### **Main Filters**")
 
 # Month
+# Month
 selected_months = st.sidebar.multiselect(
     "Select months",
-    options=month_order,
+    options=[m for m in month_order if m != "December"],
     default=[]
 )
 
@@ -125,9 +126,18 @@ if not selected_months:
 
 
 # Province 
+allowed_provinces = [
+    "Manabí",
+    "Guayas",
+    "Pichincha",
+    "Santo Domingo",
+    "Tungurahua",
+    "Los Ríos"
+]
+
 selected_provinces = st.sidebar.multiselect(
     "Select provinces",
-    options=sorted(df['province'].unique()),
+    options=allowed_provinces,
     default=[]
 )
 
@@ -138,17 +148,18 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### Optional Filters")
 
 # Risk Score Category (grouped by 100)
-risk_score_ranges = ['0-100', '100-200', '200-300', '300-400', '400-500', 
-                     '500-600', '600-700', '700-800', '800-900', '900-1000', '1000+']
+risk_score_ranges = ["900-1000","800-900","700-800","600-700","500-600","400-500","300-400","200-300",
+    "100-200"
+]
 selected_risk_category = st.sidebar.multiselect(
     "Risk score range",
     options=risk_score_ranges
 )
 
-# 4: Income category
+# Income category
 selected_income_cat = st.sidebar.multiselect(
     "Income category",
-    options=['Very Low', 'Low', 'Medium', 'High']
+    options=['Low','Medium', 'High']
 )
 
 st.sidebar.markdown("---")
@@ -174,10 +185,38 @@ if selected_risk_category:
 if selected_income_cat:
     filtered_df = filtered_df[filtered_df['income_category'].isin(selected_income_cat)]
 
+# Apply optional filters directly to df
+if selected_months:
+    df = df[df['month_name'].isin(selected_months)]
+
+if selected_provinces:
+    df = df[df['province'].isin(selected_provinces)]
+
+if selected_risk_category:
+    df = df[df['risk_score_category'].isin(selected_risk_category)]
+
+if selected_income_cat:
+    df = df[df['income_category'].isin(selected_income_cat)]
+
+# Apply optional filters directly to p_preapproved
+if selected_months:
+    p_preapproved = p_preapproved[p_preapproved['month_name'].isin(selected_months)]
+
+if selected_provinces:
+    p_preapproved = p_preapproved[p_preapproved['province'].isin(selected_provinces)]
+
+if selected_risk_category:
+    p_preapproved = p_preapproved[p_preapproved['risk_score_category'].isin(selected_risk_category)]
+
+if selected_income_cat:
+    p_preapproved = p_preapproved[p_preapproved['income_category'].isin(selected_income_cat)]   
+
 # Apply funnel filters
 p_preapproved_filtered = filtered_df[filtered_df['processed_prospect'] == 'yes']
 p_credit_form_filtered = p_preapproved_filtered[p_preapproved_filtered['event_income'] == 'begin_event']
 p_credit_invoice_filtered = p_credit_form_filtered[p_credit_form_filtered['billing'] == 'invoice']
+
+
 
 # Display active filters in the dashboard title
 
@@ -203,11 +242,11 @@ st.markdown(title)
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total Credits", f"{len(filtered_df):,}")
+col1.metric("Total Credits", f"{len(p_credit_invoice_filtered):,}")
 
 approval_rate = (
-    len(p_credit_invoice_filtered) / len(p_preapproved_filtered) * 100
-    if len(p_preapproved_filtered) > 0 else 0
+    len(p_credit_invoice_filtered) / len(df) * 100
+    if len(df) > 0 else 0
 )
 
 col2.metric("Approval Rate", f"{approval_rate:.1f}%")
@@ -222,25 +261,25 @@ st.markdown("---")
 
 # INTERACTIVE CHARTS
 
-# Chart 1: Client Conversion Funnel, with conversion rates and sales by province map
+#  Client Conversion Funnel, with conversion rates and sales by province map
 colA, colMid, colB = st.columns([1.2, 0.5, 2])
 
 
 colA.subheader("Client Conversion Funnel Process")
 
 funnel_data = pd.DataFrame({
-    'Stage': ['Pre-approved', 'Credit Form', 'Invoice'],
-    'Count': [len(p_preapproved_filtered), len(p_credit_form_filtered), len(p_credit_invoice_filtered)]
+    'Stage': ['Interested','Pre-approved', 'Credit Form', 'Invoice'],
+    'Count': [len(df),len(p_preapproved), len(p_credit_form_filtered), len(p_credit_invoice_filtered)]
 })
 
-conv_rate_1 = (len(p_credit_form_filtered) / len(p_preapproved_filtered) * 100) if len(p_preapproved_filtered) > 0 else 0
-conv_rate_2 = (len(p_credit_invoice_filtered) / len(p_credit_form_filtered) * 100) if len(p_credit_form_filtered) > 0 else 0
+conv_rate_1 = round((len(p_preapproved) / len(df) * 100), 1) if len(df) > 0 else 0
+conv_rate_2 = round((len(p_credit_form_filtered) / len(df) * 100), 1) if len(df) > 0 else 0
 
 fig1 = go.Figure(go.Funnel(
     y=funnel_data['Stage'],
     x=funnel_data['Count'],
     textinfo="value+percent initial",
-    marker=dict(color=["#3498db", "#2ecc71", "#f39c12"])
+    marker=dict(color=["#3447db","#1683f0", "#f39c12", "#2ecc71"])
 ))
 
 fig1.update_traces(textfont=dict(color="white"))
@@ -250,13 +289,13 @@ colA.plotly_chart(fig1, use_container_width=True)
 
 
 colMid.subheader("Conversion Metrics")
-
+colMid.metric("Interested", f"{len(df)}")
 colMid.markdown("Pre-approved →<br>Credit Form", unsafe_allow_html=True)
 colMid.metric("", f"{conv_rate_1:.1f}%")
 colMid.metric("Credit Form → Invoice", f"{conv_rate_2:.1f}%")
 
 if len(p_preapproved_filtered) > 0:
-    overall_conv = (len(p_credit_invoice_filtered) / len(p_preapproved_filtered)) * 100
+    overall_conv = (len(p_credit_invoice_filtered) / len(df)) * 100
     colMid.metric("Overall Conversion", f"{overall_conv:.1f}%")
 
 
@@ -325,11 +364,11 @@ else:
 st.markdown("---")
 
 
-# Chart 2: Monthly Credit Volume
+#  Monthly Credit Volume
 st.subheader("Monthly Credit Volume Convertions")
 
 monthly_data = (
-    filtered_df.groupby('month_name').size()
+    p_credit_invoice_filtered.groupby('month_name').size()
     .reindex(month_order)
     .fillna(0)
 )
@@ -346,7 +385,7 @@ fig2.update_layout(height=400, showlegend=False)
 st.plotly_chart(fig2, use_container_width=True)
 
 
-# Chart 3: Top 10 Provinces
+#  Top 10 Provinces
 col3, col4 = st.columns(2)
 
 col3.subheader("Top 10 Provinces by Credit Volume")
@@ -360,16 +399,32 @@ fig3.update_layout(xaxis_title="Number of Credits", height=400, showlegend=False
 col3.plotly_chart(fig3, use_container_width=True)
 
 
-# Chart 4: Risk Level Distribution
-
+#  Risk Level Distribution
 col4.subheader("Risk Score Distribution")
 
-risk_data = filtered_df['risk_score_category'].value_counts()
-risk_data = risk_data.reindex(risk_score_ranges)
+# Desired display order (descending, without 1000+)
+risk_score_ranges = [
+    "0-100",
+    "100-200",
+    "200-300",
+    "300-400",
+    "400-500",
+    "500-600",
+    "600-700",
+    "700-800",
+    "800-900",
+    "900-1000"
+]
+
+# Count and reorder safely
+risk_data = (
+    filtered_df['risk_score_category']
+    .value_counts()
+    .reindex(risk_score_ranges, fill_value=0)
+)
 
 import plotly.colors
 
-# Correct: Red (low score) → Green (high score)
 colors = plotly.colors.diverging.RdYlGn
 
 fig4 = go.Figure(data=[go.Bar(
@@ -389,7 +444,7 @@ fig4.update_layout(
 
 col4.plotly_chart(fig4, use_container_width=True)
 
-# Chart 5: Income Distribution & Age Distribution
+# Income Distribution & Age Distribution
 if len(filtered_df) > 0:
     col5, col6 = st.columns(2)
     
@@ -418,7 +473,7 @@ if len(filtered_df) > 0:
     col6.plotly_chart(fig6, use_container_width=True)
 
 
-# Chart 6: Income vs Financial Expenses
+#  Income vs Financial Expenses
 st.subheader("Income vs Financial Expenses")
 
 sample_size = min(1000, len(filtered_df[filtered_df['financial_expenses'] > 0]))
@@ -447,7 +502,7 @@ st.markdown("---")
 
 
 
-# Chart 9: Monthly Funnel Volume by Stage
+# Monthly Funnel Volume by Stage
 st.subheader("Monthly Funnel Volume by Stage")
 
 monthly_all = filtered_df.groupby('month_name').size().reindex(month_order).fillna(0)
@@ -505,19 +560,18 @@ st.markdown("---")
 
 
 # DATASET Download
-st.markdown("### Filtered Dataset View")
+st.markdown("### Pre-aproved Dataset View")
 
 columns_to_show = ['id', 'date', 'income', 'financial_expenses', 'province', 
                    'risk_level', 'age', 'is_approved', 'income_category']
 
-st.write(f"Showing {len(filtered_df)} records out of {len(df)} total")
-st.dataframe(filtered_df[columns_to_show], use_container_width=True, height=400)
+st.write(f"Showing {len(p_preapproved)} records out of {len(df)} total")
+st.dataframe(p_preapproved[columns_to_show], use_container_width=True, height=400)
 
 
 # Statistics
 st.markdown("### Descriptive Statistics")
 
-numeric_cols = filtered_df.select_dtypes(include=[np.number]).columns.tolist()
+numeric_cols = p_preapproved.select_dtypes(include=[np.number]).columns.tolist()
 
-st.write("**Numeric statistics**")
-st.dataframe(filtered_df[numeric_cols].describe(), use_container_width=True)
+st.dataframe(p_preapproved[numeric_cols].describe(), use_container_width=True)
