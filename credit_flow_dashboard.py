@@ -385,10 +385,10 @@ fig2.update_layout(height=400, showlegend=False)
 st.plotly_chart(fig2, use_container_width=True)
 
 
-#  Top 10 Provinces
+#  Top Provinces
 col3, col4 = st.columns(2)
 
-col3.subheader("Top 10 Provinces by Credit Volume")
+col3.subheader("Top Provinces by Credit Volume")
 province_data = filtered_df['province'].value_counts().head(10)
 
 fig3 = go.Figure(data=[
